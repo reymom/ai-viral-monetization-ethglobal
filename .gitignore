@@ -1,0 +1,33 @@
+# Ignore environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Ignore compiled Python files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore virtual environments
+venv/
+*.venv/
+Pipfile
+Pipfile.lock
+
+# Ignore wallet and config files
+wallet.json
+wallet_backup.json
+
+# Ignore logs and temp files
+*.log
+logs/
+*.tmp
+
+# Ignore data files (generated content)
+data/
+uploads/
+outputs/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
