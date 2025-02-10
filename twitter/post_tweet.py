@@ -67,8 +67,6 @@ def post_tweet_with_image(text: str, image_path: str = None):
         media_ids.append(media.media_id_string)
         print("✅ Media uploaded successfully!")
 
-    print("🐦 Posting tweet...")
-
     tweet_id = post_tweet_v2(text, media_ids)
 
     return tweet_id
