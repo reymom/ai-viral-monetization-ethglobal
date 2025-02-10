@@ -73,7 +73,6 @@ class WalletManager:
             contract_address = tx
         else:
             contract_address = tx["contract_address"]
-        print(f"✅ Token deployed at {contract_address}")
 
         if tweet_id not in self.tweet_to_contracts:
             self.tweet_to_contracts[tweet_id] = {
@@ -100,7 +99,6 @@ class WalletManager:
             contract_address = tx  # If response is a raw string, use it directly
         else:
             contract_address = tx["contract_address"]
-        print(f"✅ NFT contract deployed at {contract_address}")
 
         if tweet_id not in self.tweet_to_contracts:
             self.tweet_to_contracts[tweet_id] = {
@@ -108,12 +106,6 @@ class WalletManager:
         else:
             self.tweet_to_contracts[tweet_id]["nft"] = contract_address
         return contract_address
-
-    def extract_wallet_address(self, comment: str):
-        """Extracts a valid blockchain wallet address from a comment."""
-        match = re.search(
-            r"0x[a-fA-F0-9]{40}", comment)  # Matches Ethereum/Base addresses
-        return match.group(0) if match else None
 
     def distribute_rewards(self, tweet_id: str, engagement_data: dict):
         """Distributes ERC-20 tokens to users who liked/retweeted/commented and selects one to receive the NFT."""
@@ -128,41 +120,40 @@ class WalletManager:
             print("❌ No token deployed for this tweet.")
             return
 
-        eligible_users = set(engagement_data.get("likes", [])) | set(
-            engagement_data.get("retweets", []))
-        # Reward each user with 100 tokens
-        user_rewards = {user: 100 for user in eligible_users}
-
         if "transfer" not in self.tools:
             raise ValueError("❌ `transfer` tool not found in AgentKit!")
 
         transfer_tool = self.tools["transfer"]
 
-        for user, amount in user_rewards.items():
-            wallet_address = self.extract_wallet_address(
-                engagement_data.get("comments", {}).get(user, ""))
-            if wallet_address:
-                print(
-                    f"💰 Sending {amount} tokens to {wallet_address} from {token_address}...")
-                transfer_tool.run({
-                    "destination": wallet_address,
-                    "amount": str(amount),
-                    "asset_id": token_address
-                })
+        # ✅ Match likes with comments (only send tokens to users who both liked & commented with wallet)
+        users_with_wallets = engagement_data.get(
+            "comments", {})  # {username: wallet_address}
+        eligible_users = [user for user in engagement_data.get(
+            "likes", []) if user in users_with_wallets]
 
-        if nft_address:
-            users_with_valid_addresses = [self.extract_wallet_address(comment) for comment in engagement_data.get(
-                "comments", {}).values() if self.extract_wallet_address(comment)]
-            if users_with_valid_addresses:
-                selected_user = random.choice(users_with_valid_addresses)
-                print(f"🎨 Sending NFT {nft_address} to {selected_user}...")
-                transfer_tool.run({
-                    "destination": selected_user,
-                    "amount": "1",
-                    "asset_id": nft_address
-                })
-            else:
-                print(
-                    "❌ No valid wallet addresses found in comments, NFT not distributed.")
+        # ✅ Send 100 tokens to each eligible user
+        for user in eligible_users:
+            wallet_address = users_with_wallets[user]
+            print(
+                f"💰 Sending 100 tokens to {wallet_address} from {token_address}...")
+            transfer_tool.run({
+                "destination": wallet_address,
+                "amount": "100",
+                "asset_id": token_address
+            })
+
+        # ✅ Randomly select one user for the NFT
+        if nft_address and eligible_users:
+            selected_user = random.choice(eligible_users)
+            wallet_address = users_with_wallets[selected_user]
+            print(
+                f"🎨 Sending NFT {nft_address} to {selected_user} ({wallet_address})...")
+            transfer_tool.run({
+                "destination": wallet_address,
+                "amount": "1",
+                "asset_id": nft_address
+            })
+        else:
+            print("❌ No valid wallet addresses found in comments, NFT not distributed.")
 
         print("✅ Rewards distributed successfully.")

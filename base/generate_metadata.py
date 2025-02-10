@@ -1,8 +1,6 @@
 import os
 import requests
 from dotenv import load_dotenv
-
-# Load environment variables
 load_dotenv()
 
 PINATA_API_KEY = os.getenv("PINATA_API_KEY")
@@ -18,7 +16,6 @@ def upload_image_to_pinata(image_path):
         "pinata_secret_api_key": PINATA_SECRET_API_KEY
     }
 
-    print("🚀 Uploading image to Pinata...")
     with open(image_path, "rb") as file:
         files = {"file": file}
         response = requests.post(
@@ -60,7 +57,6 @@ def generate_metadata(tweet_id: str, image_url: str, tweet_text: str):
         ]
     }
 
-    print("🚀 Uploading metadata to Pinata...")
     metadata_uri = upload_metadata_to_pinata(metadata)
     return metadata_uri
 
