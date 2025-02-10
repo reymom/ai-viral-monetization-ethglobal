@@ -21,7 +21,7 @@ class TwitterAuth:
         self.refresh_token = os.getenv("TWITTER_REFRESH_TOKEN")
         self.redirect_uri = os.getenv("TWITTER_REDIRECT_URI")
         self.access_token = os.getenv("TWITTER_ACCESS_TOKEN")
-        self.token_expiry = 0
+        self.token_expiry = float(os.getenv("TWITTER_TOKEN_EXPIRY", 0))
         self.code_verifier = None
 
     def generate_auth_url(self):
@@ -87,6 +87,10 @@ class TwitterAuth:
         if not self.refresh_token:
             raise Exception("No refresh token available. Reauthorize the app.")
 
+        if time.time() < self.token_expiry - 60:
+            print("🔄 Token still valid, skipping refresh.")
+            return self.access_token
+
         url = "https://api.twitter.com/2/oauth2/token"
         credentials = f"{self.client_id}:{self.client_secret}"
         encoded_credentials = base64.b64encode(credentials.encode()).decode()
@@ -110,10 +114,13 @@ class TwitterAuth:
             self.refresh_token = token_data.get(
                 "refresh_token", self.refresh_token)
             self.token_expiry = time.time() + token_data.get("expires_in", 7200)
+            print(
+                f"🔄 Access token refreshed! Expires in {token_data['expires_in']} seconds.")
 
             print("🔄 Access token refreshed.")
             set_key(env_path, "TWITTER_ACCESS_TOKEN", self.access_token)
             set_key(env_path, "TWITTER_REFRESH_TOKEN", self.refresh_token)
+            set_key(env_path, "TWITTER_TOKEN_EXPIRY", str(self.token_expiry))
             return self.access_token
         else:
             raise Exception(f"Failed to refresh access token: {response.text}")
@@ -128,14 +135,10 @@ def get_twitter_client():
 
 
 if __name__ == "__main__":
+    print("🔍 Checking Twitter API authentication...")
+
     auth = TwitterAuth()
-
-    # Step 1: Get Authorization URL
-    print("🔗 Visit this URL to authenticate:")
-    print(auth.generate_auth_url())
-
-    # Step 2: Exchange Authorization Code for Access Token
-    auth_code = input("\nEnter the authorization code from Twitter: ").strip()
-    access_token = auth.get_access_token(auth_code)
-
+    expiry_timestamp = auth.token_expiry
+    print(
+        f"expires at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(expiry_timestamp))}")
     auth.refresh_access_token()
