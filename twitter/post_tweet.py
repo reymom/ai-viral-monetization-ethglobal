@@ -1,7 +1,10 @@
-from twitter.auth import get_twitter_client, TwitterAuth
-import tweepy
 import os
 import requests
+import tweepy
+from twitter.auth import TwitterAuth
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def twitter_api():
@@ -23,12 +26,11 @@ def twitter_api():
 def post_tweet_v2(text: str, media_ids):
     """Posts a tweet using Twitter API v2 with direct API request (instead of Tweepy)."""
 
-    # Refresh OAuth 2.0 token
+    # Get OAuth 2.0 token
     auth = TwitterAuth()
-    access_token = auth.refresh_access_token()
+    access_token = auth.get_access_token()
 
-    # Debug: Ensure we have a valid access token
-    if not access_token or access_token == "null":
+    if not access_token:
         raise ValueError("❌ Invalid or missing Twitter Access Token!")
 
     print("🐦 Posting tweet using direct API request...")

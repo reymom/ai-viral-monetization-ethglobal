@@ -4,25 +4,52 @@ import time
 import base64
 import random
 import string
-import tweepy
 from urllib.parse import urlencode
-from dotenv import load_dotenv, set_key
+from database.db_manager import db_manager
+from dotenv import load_dotenv
 
-env_path = '.env'
-load_dotenv(dotenv_path=env_path)
+load_dotenv()
+
+
+TWITTER_CLIENT_ID = os.getenv("TWITTER_CLIENT_ID")
+TWITTER_CLIENT_SECRET = os.getenv("TWITTER_CLIENT_SECRET")
+TWITTER_REDIRECT_URI = os.getenv("TWITTER_REDIRECT_URI")
+TOKEN_URL = "https://api.twitter.com/2/oauth2/token"
 
 
 class TwitterAuth:
     """Handles Twitter API authentication using OAuth 2.0 with Refresh Token Flow."""
 
     def __init__(self):
-        self.client_id = os.getenv("TWITTER_CLIENT_ID")
-        self.client_secret = os.getenv("TWITTER_CLIENT_SECRET")
-        self.refresh_token = os.getenv("TWITTER_REFRESH_TOKEN")
-        self.redirect_uri = os.getenv("TWITTER_REDIRECT_URI")
-        self.access_token = os.getenv("TWITTER_ACCESS_TOKEN")
-        self.token_expiry = float(os.getenv("TWITTER_TOKEN_EXPIRY", 0))
+        self.tokens = db_manager.get_auth_token("twitter")
         self.code_verifier = None
+
+    def auth_headers(self):
+        credentials = f"{TWITTER_CLIENT_ID}:{TWITTER_CLIENT_SECRET}"
+        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+
+        return {
+            "Authorization": f"Basic {encoded_credentials}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+
+    def get_access_token(self):
+        """Retrieves the stored access token or fetches a new one if expired."""
+        self.tokens = db_manager.get_auth_token("twitter")
+
+        if not self.tokens:
+            raise ValueError(
+                "❌ No stored Twitter tokens. Run authentication first!")
+
+        access_token = self.tokens["access_token"]
+        expires_at = self.tokens["expires_at"]
+
+        if expires_at and time.time() > expires_at - 60:
+            print("🔄 Access token expired, refreshing...")
+            return self.refresh_access_token()
+
+        print("🔄 Token still valid, skipping refresh.")
+        return access_token
 
     def generate_auth_url(self):
         """Generate the authorization URL to obtain the authorization code."""
@@ -35,8 +62,8 @@ class TwitterAuth:
         auth_url = "https://twitter.com/i/oauth2/authorize"
         query_params = {
             "response_type": "code",
-            "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
+            "client_id": TWITTER_CLIENT_ID,
+            "redirect_uri": TWITTER_REDIRECT_URI,
             "scope": "tweet.read tweet.write like.read users.read offline.access",
             "state": state,
             "code_challenge": code_challenge,
@@ -44,101 +71,79 @@ class TwitterAuth:
         }
         return f"{auth_url}?{urlencode(query_params, safe=':/')}"
 
-    def get_access_token(self, auth_code):
+    def exchange_access_token(self, auth_code):
         """Exchange authorization code for access token."""
-        url = "https://api.twitter.com/2/oauth2/token"
-        credentials = f"{self.client_id}:{self.client_secret}"
-        encoded_credentials = base64.b64encode(credentials.encode()).decode()
 
-        headers = {
-            "Authorization": f"Basic {encoded_credentials}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
         data = urlencode({
             "grant_type": "authorization_code",
             "code": auth_code,
             "code_verifier": self.code_verifier,
-            "redirect_uri": self.redirect_uri,
-            "client_id": self.client_id,
+            "redirect_uri": TWITTER_REDIRECT_URI,
+            "client_id": TWITTER_CLIENT_ID,
         })
 
-        response = requests.post(url, headers=headers, data=data)
+        response = requests.post(
+            TOKEN_URL, headers=self.auth_headers(), data=data)
 
         if response.status_code == 200:
             token_data = response.json()
-            self.access_token = token_data["access_token"]
-            self.refresh_token = token_data.get(
-                "refresh_token", self.refresh_token)  # Store the refresh token
-            self.token_expiry = time.time() + token_data.get("expires_in",
-                                                             7200)  # Default: 2 hours
+            new_access_token = token_data["access_token"]
 
-            # Save the refresh token
-            os.environ["TWITTER_REFRESH_TOKEN"] = self.refresh_token
+            self.save_tokens(new_access_token,
+                             token_data["refresh_token"], token_data.get("expires_in", 7200))
 
             print("✅ Access token obtained successfully.")
-            set_key(env_path, "TWITTER_ACCESS_TOKEN", self.access_token)
-            set_key(env_path, "TWITTER_REFRESH_TOKEN", self.refresh_token)
-            return self.access_token
+            self.tokens = db_manager.get_auth_token("twitter")
+            return new_access_token
         else:
             raise Exception(f"Failed to obtain access token: {response.text}")
 
     def refresh_access_token(self):
         """Refresh the access token using the refresh token."""
-        if not self.refresh_token:
-            raise Exception("No refresh token available. Reauthorize the app.")
+        self.tokens = db_manager.get_auth_token("twitter")
+        print("self.tokens = ", self.tokens)
 
-        if time.time() < self.token_expiry - 60:
+        if not self.tokens:
+            raise ValueError("❌ No refresh token found. Authenticate first!")
+
+        if time.time() < self.tokens["expires_at"] - 60:
             print("🔄 Token still valid, skipping refresh.")
-            return self.access_token
+            return self.tokens["access_token"]
 
-        url = "https://api.twitter.com/2/oauth2/token"
-        credentials = f"{self.client_id}:{self.client_secret}"
-        encoded_credentials = base64.b64encode(credentials.encode()).decode()
-
-        headers = {
-            "Authorization": f"Basic {encoded_credentials}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        refresh_token = self.tokens["refresh_token"]
         data = urlencode({
             "grant_type": "refresh_token",
-            "refresh_token": self.refresh_token,
-            "client_id": self.client_id,
+            "refresh_token": refresh_token,
+            "client_id": TWITTER_CLIENT_ID,
         })
 
-        response = requests.post(url, headers=headers, data=data)
-        print(response)
+        response = requests.post(
+            TOKEN_URL, headers=self.auth_headers(), data=data)
 
         if response.status_code == 200:
             token_data = response.json()
-            self.access_token = token_data["access_token"]
-            self.refresh_token = token_data.get(
-                "refresh_token", self.refresh_token)
-            self.token_expiry = time.time() + token_data.get("expires_in", 7200)
-            print(
-                f"🔄 Access token refreshed! Expires in {token_data['expires_in']} seconds.")
+            new_access_token = token_data["access_token"]
+            expires_in = token_data.get("expires_in", 7200)
 
-            print("🔄 Access token refreshed.")
-            set_key(env_path, "TWITTER_ACCESS_TOKEN", self.access_token)
-            set_key(env_path, "TWITTER_REFRESH_TOKEN", self.refresh_token)
-            set_key(env_path, "TWITTER_TOKEN_EXPIRY", str(self.token_expiry))
-            return self.access_token
+            self.save_tokens(new_access_token,
+                             token_data["refresh_token"], expires_in)
+
+            expires_at = time.time() + expires_in
+            print(f"🔄 Access token refreshed! Expires at {expires_at}")
+            return new_access_token
         else:
             raise Exception(f"Failed to refresh access token: {response.text}")
 
-
-def get_twitter_client():
-    """Creates an authenticated Tweepy client with refreshed access token."""
-    auth = TwitterAuth()
-    auth.refresh_access_token()
-
-    return tweepy.Client(auth.access_token)
+    def save_tokens(self, access_token, refresh_token, expires_in):
+        """Saves new tokens after the first authentication."""
+        expires_at = int(time.time()) + expires_in
+        db_manager.store_auth_token(
+            "twitter", access_token, refresh_token, expires_at)
+        print(f"✅ Tokens stored in database. Access expires at {expires_at}")
 
 
 if __name__ == "__main__":
     print("🔍 Checking Twitter API authentication...")
 
     auth = TwitterAuth()
-    expiry_timestamp = auth.token_expiry
-    print(
-        f"expires at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(expiry_timestamp))}")
     auth.refresh_access_token()

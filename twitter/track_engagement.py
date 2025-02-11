@@ -1,5 +1,9 @@
-from twitter.auth import get_twitter_client
 import re
+import requests
+from twitter.auth import TwitterAuth
+
+
+TWITTER_API_URL = "https://api.twitter.com/2"
 
 
 def extract_wallet_address(text):
@@ -10,30 +14,51 @@ def extract_wallet_address(text):
 
 
 def get_tweet_engagement(tweet_id):
-    """Fetches users who liked, retweeted, and commented with wallet addresses."""
-    client = get_twitter_client()
+    """Fetches users who liked, retweeted, and commented with wallet addresses using direct API requests."""
+    auth = TwitterAuth()
+    access_token = auth.get_access_token()
 
-    # Get users who liked the tweet
-    likes = client.get_liking_users(id=tweet_id)
-    liking_users = [user.username for user in likes.data] if likes.data else []
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
 
-    # Get tweet replies (comments)
+    # ✅ Get users who liked the tweet
+    likes_url = f"{TWITTER_API_URL}/tweets/{tweet_id}/liking_users"
+    likes_response = requests.get(likes_url, headers=headers)
+
+    if likes_response.status_code == 200:
+        likes_data = likes_response.json()
+        liking_users = [user["username"]
+                        for user in likes_data.get("data", [])]
+    else:
+        print(f"❌ Failed to fetch likes: {likes_response.text}")
+        liking_users = []
+
+    # ✅ Get tweet replies (comments)
     comments = {}
-    response = client.search_recent_tweets(
-        query=f"conversation_id:{tweet_id} -is:retweet",
-        expansions="author_id",
-        tweet_fields=["author_id", "text"],
-        user_fields=["username"]
-    )
+    search_url = f"{TWITTER_API_URL}/tweets/search/recent"
+    query_params = {
+        "query": f"conversation_id:{tweet_id} -is:retweet",
+        "expansions": "author_id",
+        "tweet.fields": "author_id,text",
+        "user.fields": "username"
+    }
 
-    if response.data and response.includes:
-        users_map = {
-            user.id: user.username for user in response.includes["users"]}
+    search_response = requests.get(
+        search_url, headers=headers, params=query_params)
 
-        for tweet in response.data:
-            wallet_address = extract_wallet_address(tweet.text)
-            if wallet_address and tweet.author_id in users_map:
-                comments[users_map[tweet.author_id]] = wallet_address
+    if search_response.status_code == 200:
+        response_data = search_response.json()
+        users_map = {user["id"]: user["username"]
+                     for user in response_data.get("includes", {}).get("users", [])}
+
+        for tweet in response_data.get("data", []):
+            wallet_address = extract_wallet_address(tweet["text"])
+            if wallet_address and tweet["author_id"] in users_map:
+                comments[users_map[tweet["author_id"]]] = wallet_address
+    else:
+        print(f"❌ Failed to fetch comments: {search_response.text}")
 
     return {
         "likes": liking_users,
