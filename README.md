@@ -40,6 +40,44 @@ With **Web3 monetization**, creators will turn engagement into **real economic i
 - **Base L2**: Low-cost, scalable blockchain.
 - **Twitter API + Tweepy**: Social engagement tracking.
 - **Python + Web3**: Fully automated reward system.
+- **SQLite Database**: Secure storage for authentication tokens and deployed contract addresses.
+
+## **🔹 Database Management (SQLite)**
+
+This project uses **SQLite** to store critical data for seamless automation:
+
+✅ **Twitter Authentication Tokens**
+
+- The OAuth access & refresh tokens are stored in the database.
+- **No need to manually update `.env`**—tokens refresh automatically.
+
+✅ **Stored Contract Addresses**
+
+- The system **checks if a token or NFT has already been deployed** for a tweet.
+- If **found in the database**, it reuses the existing contract to prevent duplicate deployments.
+- Ensures efficient resource usage & prevents unnecessary contract deployments.
+
+### **🛠️ Database Structure**
+
+| Table                | Purpose                                      |
+| -------------------- | -------------------------------------------- |
+| `auth_tokens`        | Stores Twitter API access & refresh tokens   |
+| `deployed_contracts` | Maps tweets to deployed ERC-20/NFT contracts |
+
+### **🔍 View Stored Data**
+
+To inspect stored contracts & tokens, open the SQLite database:
+
+```bash
+sqlite3 data/app.db
+```
+
+Run queries like:
+
+```
+SELECT * FROM auth_tokens;
+SELECT * FROM deployed_contracts;
+```
 
 ## **🔹 Future Enhancements**
 
@@ -72,8 +110,6 @@ TWITTER_ACCESS_TOKEN_OAUTH1_SECRET=
 TWITTER_CLIENT_ID=
 TWITTER_CLIENT_SECRET=
 TWITTER_REDIRECT_URI=
-TWITTER_ACCESS_TOKEN=
-TWITTER_REFRESH_TOKEN=
 CDP_API_KEY_NAME=
 CDP_API_KEY_PRIVATE_KEY=
 NETWORK_ID=base-sepolia
@@ -92,7 +128,7 @@ To generate **Twitter Access & Refresh Tokens** for the first time:
 python -m twitter.get_token
 ```
 
-You will be prompted to authenticate. The token will be saved automatically in `.env`.
+You will be prompted to authenticate. The access token and refresh token will be saved automatically in SQLite and will auto-refresh when expired.
 
 ### 4️⃣ Test Twitter API Authentication
 
@@ -102,7 +138,6 @@ python -m twitter.auth
 
 ```bash
 🔍 Checking Twitter API authentication...
-<Response [200]>
 🔄 Access token refreshed! Expires in 7200 seconds.
 🔄 Access token refreshed.
 ```
@@ -113,7 +148,6 @@ python -m twitter.auth
 
 ```bash
 🔍 Checking Twitter API authentication...
-expires at 2025-02-10 08:47:54
 🔄 Token still valid, skipping refresh.
 ```
 
@@ -123,10 +157,10 @@ expires at 2025-02-10 08:47:54
 python tweet_nft_token_pipeline.py
 ```
 
-✅ 1️⃣ AI Generates a Tweet & Image
-✅ 2️⃣ Tweet is Posted
-✅ 3️⃣ Engagement Tracking & Reward Distribution
-✅ 4️⃣ Token & NFT are Distributed to Engaged Users
+- ✅ 1️⃣ AI Generates a Tweet & Image
+- ✅ 2️⃣ Tweet is Posted
+- ✅ 3️⃣ Engagement Tracking & Reward Distribution
+- ✅ 4️⃣ Token & NFT are Distributed to Engaged Users
 
 🚀 Welcome to the **future of social engagement monetization!**
 
@@ -210,6 +244,12 @@ Enter Tweet Text: test tweet :)
 ```
 
 ### 3️⃣ Deploy Token & NFT
+
+When deploying an ERC-20 token or NFT, the system **checks if a contract is already deployed for the tweet**.
+
+✅ **If found in the database**, it reuses the contract.
+
+🚀 **If not found**, a new contract is deployed and stored.
 
 ```bash
 python -m base.test_cdp_wallet
