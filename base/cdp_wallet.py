@@ -1,10 +1,10 @@
 import random
-import re
 import os
 import json
 from cdp_langchain.agent_toolkits import CdpToolkit
 from cdp_langchain.utils import CdpAgentkitWrapper
 from base.config import CDP_API_KEY_NAME, CDP_API_KEY_PRIVATE_KEY, NETWORK_ID
+from database.db_manager import db_manager
 
 
 WALLET_FILE = "data/wallet.json"
@@ -59,6 +59,12 @@ class WalletManager:
 
     def deploy_token(self, name: str, symbol: str, supply: int, tweet_id: str):
         """Deploys an ERC-20 token using AgentKit."""
+        existing_contracts = db_manager.get_contracts(tweet_id)
+        if existing_contracts.get("token"):
+            print(
+                f"🔄 Token already deployed at {existing_contracts['token']} for tweet {tweet_id}. Reusing it.")
+            return existing_contracts["token"]
+
         print(
             f"🚀 Deploying {name} ({symbol}) with supply {supply} on {NETWORK_ID}...")
 
@@ -69,20 +75,20 @@ class WalletManager:
         tx = deploy_tool.run(
             {"name": name, "symbol": symbol, "total_supply": str(supply)})
 
-        if isinstance(tx, str):
-            contract_address = tx
-        else:
-            contract_address = tx["contract_address"]
+        contract_address = tx if isinstance(
+            tx, str) else tx["contract_address"]
+        db_manager.store_contracts(tweet_id, token_address=contract_address)
 
-        if tweet_id not in self.tweet_to_contracts:
-            self.tweet_to_contracts[tweet_id] = {
-                "token": contract_address, "nft": None}
-        else:
-            self.tweet_to_contracts[tweet_id]["nft"] = contract_address
         return contract_address
 
     def mint_nft(self, tweet_id: str, metadata_uri: str):
         """Mints an ERC-721 NFT using AgentKit."""
+        existing_contracts = db_manager.get_contracts(tweet_id)
+        if existing_contracts.get("nft"):
+            print(
+                f"🔄 NFT already deployed at {existing_contracts['nft']} for tweet {tweet_id}. Reusing it.")
+            return existing_contracts["nft"]
+
         name = f"AgenticNFT-{tweet_id}"
         symbol = f"AGNTC{tweet_id[-4:]}"
         print(
@@ -95,29 +101,23 @@ class WalletManager:
         tx = deploy_nft_tool.run(
             {"name": name, "symbol": symbol, "base_uri": metadata_uri})
 
-        if isinstance(tx, str):
-            contract_address = tx  # If response is a raw string, use it directly
-        else:
-            contract_address = tx["contract_address"]
+        contract_address = tx if isinstance(
+            tx, str) else tx["contract_address"]
+        db_manager.store_contracts(tweet_id, nft_address=contract_address)
 
-        if tweet_id not in self.tweet_to_contracts:
-            self.tweet_to_contracts[tweet_id] = {
-                "token": None, "nft": contract_address}
-        else:
-            self.tweet_to_contracts[tweet_id]["nft"] = contract_address
         return contract_address
 
     def distribute_rewards(self, tweet_id: str, engagement_data: dict):
         """Distributes ERC-20 tokens to users who liked/retweeted/commented and selects one to receive the NFT."""
-        if tweet_id not in self.tweet_to_contracts:
-            print("❌ No deployed token or NFT found for this tweet.")
-            return
-
-        token_address = self.tweet_to_contracts[tweet_id]["token"]
-        nft_address = self.tweet_to_contracts[tweet_id]["nft"]
+        contracts = db_manager.get_contracts(tweet_id)
+        token_address = contracts.get("token")
+        nft_address = contracts.get("nft")
 
         if not token_address:
             print("❌ No token deployed for this tweet.")
+            return
+        if not nft_address:
+            print("❌ No NFT deployed for this tweet.")
             return
 
         if "transfer" not in self.tools:
@@ -127,7 +127,7 @@ class WalletManager:
 
         # ✅ Match likes with comments (only send tokens to users who both liked & commented with wallet)
         users_with_wallets = engagement_data.get(
-            "comments", {})  # {username: wallet_address}
+            "comments", {})
         eligible_users = [user for user in engagement_data.get(
             "likes", []) if user in users_with_wallets]
 

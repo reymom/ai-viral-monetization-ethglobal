@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 CDP_API_KEY_NAME = os.getenv("CDP_API_KEY_NAME")
