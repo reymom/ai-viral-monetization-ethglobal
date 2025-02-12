@@ -49,6 +49,12 @@ class TwitterAuth:
             return self.refresh_access_token()
 
         print("🔄 Token still valid, skipping refresh.")
+
+        headers = {"Authorization": f"Bearer {access_token}"}
+        response = requests.get(
+            "https://api.twitter.com/2/users/me", headers=headers)
+        print("🔍 Auth check:", response.status_code, response.text)
+
         return access_token
 
     def generate_auth_url(self):
@@ -64,7 +70,7 @@ class TwitterAuth:
             "response_type": "code",
             "client_id": TWITTER_CLIENT_ID,
             "redirect_uri": TWITTER_REDIRECT_URI,
-            "scope": "tweet.read tweet.write like.read users.read offline.access",
+            "scope": "tweet.read tweet.write media.write like.read users.read offline.access",
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "plain",
@@ -101,7 +107,6 @@ class TwitterAuth:
     def refresh_access_token(self):
         """Refresh the access token using the refresh token."""
         self.tokens = db_manager.get_auth_token("twitter")
-        print("self.tokens = ", self.tokens)
 
         if not self.tokens:
             raise ValueError("❌ No refresh token found. Authenticate first!")
@@ -146,4 +151,4 @@ if __name__ == "__main__":
     print("🔍 Checking Twitter API authentication...")
 
     auth = TwitterAuth()
-    auth.refresh_access_token()
+    auth.get_access_token()
