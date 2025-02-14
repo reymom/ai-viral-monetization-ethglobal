@@ -5,7 +5,10 @@ from base.cdp_wallet import WalletManager
 from base.generate_metadata import upload_image_to_pinata, generate_metadata
 from twitter.post_tweet import post_tweet_with_image
 from twitter.track_engagement import get_tweet_engagement
-from base.agent import execute_agent_request
+from base.agent import execute_agent_request, generate_image, extract_tweet
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class TweetNFTPipeline:
@@ -20,9 +23,10 @@ class TweetNFTPipeline:
         print("\n" + "=" * 60)
         print("🤖 STEP 1: Generating AI-powered tweet...")
         print("=" * 60)
-        tweet_text = execute_agent_request(tweet_prompt)
-        print(f"\n📝 Generated Tweet:\n{tweet_text}\n")
+        raw_tweet_text = execute_agent_request(tweet_prompt)
+        tweet_text = extract_tweet(raw_tweet_text)
 
+        print(f"\n📝 Generated Tweet:\n{tweet_text}\n")
         # Ask for user confirmation to proceed
         print("-" * 50)
         user_input = input(
@@ -38,14 +42,19 @@ class TweetNFTPipeline:
         print("\n" + "=" * 60)
         print("🎨 STEP 2: Generating AI-powered image...")
         print("=" * 60)
-        image_path = execute_agent_request(
-            f"Generate an AI image for this tweet: {tweet_text}", "dalle-image-generator")
+        image_path = generate_image(
+            f"Generate an AI image for this tweet: {tweet_text}")
+        if not image_path:
+            print("❌ Image generation failed. Stopping pipeline.")
+            return
         print(f"\n🖼️ Image saved at: {image_path}\n")
 
         print("\n" + "=" * 60)
         print("🐦 STEP 3: Posting Tweet...")
         print("=" * 60)
 
+        # tweet_text = "This is a test tweet with an AI-generated image!"
+        # image_path = "data/futuristic_city.png"
         tweet_id = post_tweet_with_image(tweet_text, image_path)
         if not tweet_id:
             print("\n❌ Failed to post tweet. Stopping pipeline.\n")
@@ -60,12 +69,14 @@ class TweetNFTPipeline:
         if not image_ipfs_uri:
             print("\n❌ Image upload failed. Stopping pipeline.\n")
             return
+        print(f"🔗 Image URI: {image_ipfs_uri}")
 
         metadata_ipfs_uri = generate_metadata(
             tweet_id, image_ipfs_uri, tweet_text)
         if not metadata_ipfs_uri:
             print("\n❌ Metadata upload failed. Stopping pipeline.\n")
             return
+        print(f"🔗 Metadata URI: {metadata_ipfs_uri}")
 
         print("\n" + "=" * 60)
         print("🔗 STEP 5: Deploying ERC-20 Token & Minting NFT...")
@@ -87,6 +98,7 @@ class TweetNFTPipeline:
         print(
             f"✅ Tweet {tweet_id} processed! Waiting {self.interval} seconds before reward distribution...")
         print("=" * 60)
+        countdown_timer(200)
 
         print("\n" + "=" * 60)
         print("📊 STEP 6: Checking Tweet Engagement & Distributing Rewards...")
@@ -117,18 +129,14 @@ if __name__ == "__main__":
     pipeline = TweetNFTPipeline(interval=200)
 
     print("\n" + "=" * 80)
-    print("✅ Running test pipeline with pre-defined tweet and image...")
+    print("✅ Running agent pipeline...")
     print("=" * 80 + "\n")
 
-    tweet_prompt = """
-        🔥 Generate a high-impact, viral tweet about AI, Web3, and blockchain automation with AgentKit. Focus on:
-        The power of AI-driven onchain automation
-        NFTs & ERC-20 rewards for engagement
-        How AgentKit + Base enable decentralized monetization
-        Exciting future applications beyond the hackathon
-        Tagging @coinbaseDev, @BuildOnBase, and any key partners
-        Use of 🔥 emojis & concise phrasing to drive engagement
-    """
-    pipeline.execute_pipeline(
-        "Generate a viral tweet about AI, Web3, and blockchain automation with AgentKit.")
+    prompt = (
+        "Write a short, engaging tweet under 280 characters about AI-driven blockchain automation with AgentKit. "
+        "Mention on-chain automation, NFT & ERC-20 rewards, and decentralized monetization. "
+        "Tag @coinbaseDev. "
+        "Format the response as: Tweet: <your tweet here>"
+    )
+    pipeline.execute_pipeline(prompt)
     print("\n🎉 Test pipeline executed successfully!\n")
