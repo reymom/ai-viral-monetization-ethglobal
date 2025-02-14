@@ -86,7 +86,6 @@ def finalize_upload(access_token, media_id):
             f"❌ Failed to FINALIZE upload: {response.status_code} {response.text}")
 
     response = response.json()
-    print(f"response = {response}")
 
     # ✅ Check if async processing is required
     if "processing_info" in response["data"]:

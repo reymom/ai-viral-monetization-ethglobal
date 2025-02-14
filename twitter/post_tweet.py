@@ -23,7 +23,6 @@ def post_tweet(access_token: str, text: str, media_ids):
     if media_ids:
         payload["media"] = {"media_ids": media_ids}
 
-    print("payload = ", payload)
     response = requests.post(TWEET_URL, json=payload, headers=headers)
 
     if response.status_code == 201:
@@ -38,6 +37,10 @@ def post_tweet(access_token: str, text: str, media_ids):
 
 def post_tweet_with_image(text: str, image_path: str = None):
     """Posts a tweet with optional image attachment, ensuring media is uploaded first."""
+    if len(text) > 280:
+        print(f"❌ Error: Tweet is too long ({len(text)} chars). Aborting.")
+        return
+
     auth = TwitterAuth()
     access_token = auth.get_access_token()
 
