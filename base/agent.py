@@ -1,90 +1,88 @@
 import os
 import re
-import requests
+import traceback
 import warnings
 import replicate
+from io import BytesIO
 from PIL import Image
 from openai import OpenAI
 from langchain_huggingface import HuggingFaceEndpoint
-from langchain_community.agent_toolkits.load_tools import load_tools
-from cdp_langchain.agent_toolkits import CdpToolkit
-from cdp_langchain.utils import CdpAgentkitWrapper
-from base.cdp_wallet import WalletManager
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 
 warnings.simplefilter("ignore", category=FutureWarning)
 load_dotenv()
 
-# ✅ Load Image Generation Provider from Config
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()
 IMAGE_PROVIDER = os.getenv("IMAGE_GENERATION_PROVIDER", "openai").lower()
 
-# ✅ OpenAI Client (if using DALL·E)
-client = None
-if IMAGE_PROVIDER == "openai":
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
-HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-HF_MODEL = "runwayml/stable-diffusion-v1-5"
-
-
-# ✅ Initialize LangChain LLM
-llm = HuggingFaceEndpoint(
-    repo_id="HuggingFaceH4/zephyr-7b-beta",
-    task="text-generation",
-    huggingfacehub_api_token=os.getenv("HUGGINGFACEHUB_API_TOKEN"),
-    temperature=0.7,
-    model_kwargs={"max_length": 512},
-)
-
-# ✅ Initialize AgentKit Wallet
-wallet_manager = WalletManager()
-
-# ✅ Initialize CDP AgentKit Wrapper & Toolkit
-cdp = CdpAgentkitWrapper()
-cdp_toolkit = CdpToolkit.from_cdp_agentkit_wrapper(cdp)
-cdp_tools = cdp_toolkit.get_tools()
-
-# ✅ Load Additional AI Tools
-dalle_tool = load_tools(["dalle-image-generator"])
-
-# ✅ Combine All Tools
-all_tools = cdp_tools + dalle_tool
-
-# ✅ Agent Configuration
-memory = {}
-config = {"configurable": {"thread_id": "CDP AgentKit Chatbot"}}
-
-
-def execute_agent_request(query: str, tool_name=None):
-    """Executes a query through the AI Agent. Uses DALL·E if tool_name is specified."""
+def execute_agent_request(query: str):
+    """Executes a query through the AI Agent and extracts the response correctly."""
     print(f"🤖 Executing: {query}")
 
-    if tool_name == "dalle-image-generator":
-        response = client.images.generate(
-            model="dall-e-2",
-            prompt=query,
-            n=1,
-            size="1024x1024"
+    HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"
+    if LLM_PROVIDER == "huggingface":
+        llm_client = HuggingFaceEndpoint(
+            repo_id=HF_MODEL,
+            task="text-generation",
+            huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
+            temperature=0.9,
+            max_new_tokens=280,
+            do_sample=True,
+            top_p=0.85,
+            typical_p=0.9,
+            model_kwargs={
+                "frequency_penalty": 0.7,
+                "presence_penalty": 0.6,
+            }
         )
-
-        image_url = response.data[0].url
-        return image_url
+    elif LLM_PROVIDER == "openai":
+        llm_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     else:
-        response = llm.invoke(query)
+        raise ValueError(
+            "❌ Invalid LLM_PROVIDER. Choose either 'openai' or 'huggingface'.")
 
-    print(f"🔍 Agent Response: {response}")
-    return response.strip()
+    response = llm_client.invoke(query) if LLM_PROVIDER == "huggingface" else llm_client.completions.create(
+        model="gpt-4-turbo",
+        prompt=query,
+        max_tokens=280,
+        temperature=0.9
+    ).choices[0].text.strip()
+
+    if isinstance(response, dict):
+        response_text = response.get("generated_text", "").strip()
+    elif isinstance(response, list) and len(response) > 0:
+        response_text = response[0].get("generated_text", "").strip()
+    else:
+        response_text = str(response).strip()
+
+    # print("\n🚨 RAW LLM RESPONSE 🚨\n", response_text, "\n")
+
+    return response_text
 
 
-def extract_tweet(text: str) -> str:
-    """Extracts the tweet from AI-generated text by removing instructions."""
-    # Match text inside quotes or remove prompt repetition
-    match = re.search(r'["“](.+?)["”]', text, re.DOTALL)
+def extract_tweet(response: str) -> str:
+    """Extracts the tweet from AI-generated text using regex."""
+    match = re.search(r'Tweet:\s*["“”`]?(.+?)["“”`]?\s*$',
+                      response, re.DOTALL | re.MULTILINE)
     if match:
         return match.group(1).strip()
-    return text.strip()
+
+    # Fallback: Take last non-empty line as tweet
+    lines = response.strip().split("\n")
+    for line in reversed(lines):
+        if line.strip():
+            return line.strip()
+
+    tweet = response.strip()
+    if len(tweet) > 280:
+        print(f"⚠️ Tweet is too long ({len(tweet)} chars). Truncating...")
+        tweet = tweet[:277] + "..."
+
+    return tweet
 
 
 def generate_image(prompt: str):
@@ -103,6 +101,7 @@ def generate_image_openai(prompt: str):
     """Generates an AI image using DALL·E 2."""
     print("🖼️ Using OpenAI's DALL·E 2...")
 
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     response = client.images.generate(
         model="dall-e-2",
         prompt=prompt,
@@ -135,63 +134,90 @@ def generate_image_replicate(prompt: str):
     return image_url
 
 
-def save_image(image_url: str, filename: str = "generated_image.png") -> str:
-    """Saves AI-generated image to `data/` folder only if the URL is valid."""
-    print(f"📥 Attempting to save image from URL: {image_url}")
-
-    if not image_url or not image_url.startswith("http"):
-        print(f"❌ Invalid image URL: {image_url}")
-        return None
-
-    os.makedirs("data", exist_ok=True)
-    image_path = os.path.join("data", filename)
-
-    try:
-        response = requests.get(image_url)
-        response.raise_for_status()
-
-        with open(image_path, "wb") as f:
-            f.write(response.content)
-
-        print(f"✅ Image saved successfully at: {image_path}")
-        return image_path
-
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Failed to download image: {e}")
-        return None
-
-
 def generate_image_huggingface(prompt):
     """Generates an image using Hugging Face's Free Stable Diffusion API with optimized settings."""
-    print("🖼️ Using Hugging Face's Stable Diffusion v1.5 (Light)...")
 
-    client = InferenceClient(model=HF_MODEL, token=HUGGINGFACE_API_KEY)
+    base_model = "stabilityai/stable-diffusion-xl-base-1.0"
+    refiner_model = "stabilityai/stable-diffusion-xl-refiner-1.0"
 
-    response = client.text_to_image(
-        prompt, params={"width": 384, "height": 384,
-                        "num_inference_steps": 15, "guidance_scale": 5.0}
-    )
+    params = {
+        "width": 1152,
+        "height": 1152,
+        "num_inference_steps": 40,
+        "guidance_scale": 8,
+        "negative_prompt": (
+            "blurry, distorted, deformed, unnatural, worst quality, artifacts, pixelated, low resolution, "
+            "extra limbs, missing fingers, mutated faces, bad anatomy"
+        )
+    }
 
-    if isinstance(response, Image.Image):
-        image_path = "data/generated_image.png"
+    client = InferenceClient(
+        model=base_model, token=HUGGINGFACEHUB_API_TOKEN, timeout=180)
+    try:
+        response = client.text_to_image(
+            prompt, params=params
+        )
+
+        if isinstance(response, Image.Image):
+            image = response
+        elif isinstance(response, bytes):
+            image = Image.open(BytesIO(response))
+        else:
+            print(f"❌ Image generation failed: {response}")
+            return None
+
         os.makedirs("data", exist_ok=True)
-        response.save(image_path, format="PNG")
-        print(f"✅ Image saved at: {image_path}")
-        return image_path
-    else:
-        print(f"❌ Image generation failed: {response}")
+        base_image_path = "data/generated_image_base.png"
+        image.save(base_image_path, format="PNG")
+        print(f"✅ Image saved at: {base_image_path}")
+
+        # ✅ Step 2: Optionally refine the image
+        image_bytes = BytesIO()
+        image.save(image_bytes, format="PNG")
+        image_bytes.seek(0)
+        client = InferenceClient(
+            model=refiner_model, token=HUGGINGFACEHUB_API_TOKEN)
+        response = client.image_to_image(
+            image=image_bytes.getvalue(), prompt=prompt)
+        if isinstance(response, bytes):
+            refined_image = Image.open(BytesIO(response))
+        elif isinstance(response, Image.Image):
+            refined_image = response
+        else:
+            print(
+                f"❌ Unexpected response type from REFINER model: {type(response)}")
+            return base_image_path
+
+        refined_image_path = "data/generated_image.png"
+        refined_image.save(refined_image_path, format="PNG")
+        print(f"✅ Refined Image saved at: {refined_image_path}")
+        return refined_image_path
+
+    except Exception as e:
+        print(f"❌ Image generation error: {e}")
+        traceback.print_exc()
         return None
 
 
 if __name__ == "__main__":
     print("🔍 Testing AI Tweet & Image Generation...")
 
-    raw_tweet_text = execute_agent_request(
-        "Generate a viral tweet about AI, Web3, and blockchain automation with AgentKit.")
+    prompt = (
+        "Generate a high-impact, viral tweet (under 280 characters) "
+        "about AI, Web3, and blockchain automation with AgentKit. "
+        "Focus on:\n"
+        "- The power of AI-driven onchain automation\n"
+        "- NFTs & ERC-20 rewards for engagement\n"
+        "- How AgentKit + Base enable decentralized monetization\n"
+        "- Tagging @coinbaseDev, @BuildOnBase, and any key partners\n\n"
+        "Output format: 'Tweet: <your tweet here>'"
+    )
+
+    raw_tweet_text = execute_agent_request(prompt)
     tweet_text = extract_tweet(raw_tweet_text)
     print(f"\n📝 Generated Tweet:\n{tweet_text}")
 
+    tweet_text = "🤖+🔗+🌐=AI-driven #Web3 revolution! AgentKit's onchain automation just won @coinbaseDev's hackathon! 🏆 NFT & ERC-20 rewards for engagement, thanks to @BuildOnBase! Decentralized monetization is here! 🚀 Beyond hackathons, imagine AI-managed DAOs & smart contracts! 🤩 #AI #Blockchain #Web3"
     image_path = generate_image(
         f"Generate an AI image for this tweet: {tweet_text}")
-
     print("\n✅ Test completed successfully!")

@@ -162,6 +162,8 @@ python tweet_nft_token_pipeline.py
 - ✅ 3️⃣ Engagement Tracking & Reward Distribution
 - ✅ 4️⃣ Token & NFT are Distributed to Engaged Users
 
+For an example output, see [Pipeline Example Output](#pipeline-example-output).
+
 🚀 Welcome to the **future of social engagement monetization!**
 
 ## Testing & Debugging
@@ -303,4 +305,93 @@ Example Output:
 🎨 Sending NFT to: 0xd9A870f56Aa563A9671028518b1222d8B4Ce02e0
 ✅ Rewards distributed successfully.
 
+```
+
+## **🔹 Example: Full Pipeline Execution Output**
+
+```bash
+================================================================================
+✅ Running agent pipeline...
+================================================================================
+
+
+============================================================
+🤖 STEP 1: Generating AI-powered tweet...
+============================================================
+🤖 Executing: Write a short, engaging tweet under 280 characters about AI-driven blockchain automation with AgentKit. Mention on-chain automation, NFT & ERC-20 rewards, and decentralized monetization. Tag @coinbaseDev. Format the response as: Tweet: <your tweet here>
+
+📝 Generated Tweet:
+🤖🔗 Automate on-chain magic with @AgentKitAI! AI-driven blockchain automation for NFT & ERC-20 rewards. Decentralize & monetize like never before. 💥 #AgentKit #AI #Blockchain #OnChain #NFT #ERC20 #Decentralized #Monetization @coinbaseDev
+
+--------------------------------------------------
+👍 Do you like this tweet? (yes/no/edit): yes
+--------------------------------------------------
+
+============================================================
+🎨 STEP 2: Generating AI-powered image...
+============================================================
+🎨 Generating AI Image using HUGGINGFACE...
+✅ Image saved at: data/generated_image_base.png
+✅ Refined Image saved at: data/generated_image.png
+
+🖼️ Image saved at: data/generated_image.png
+
+
+============================================================
+🐦 STEP 3: Posting Tweet...
+============================================================
+🔄 Token still valid, skipping refresh.
+🔍 Auth check: 200 {"data":{"id":"1888039454746824704","name":"Obfuscated Cat Agent","username":"ObfuscatedCat"}}
+📤 Initializing media upload...
+✅ INIT successful! Media ID: 1890299907459936256
+✅ Media upload chunk appended successfully!
+📤 Finalizing media upload...
+✅ Media FINALIZED and ready for use!
+✅ Media uploaded successfully!
+✅ Tweet posted successfully! Tweet ID: 1890299939223470499
+🐦 Tweet posted: https://x.com/0xReymon/status/1890299939223470499
+
+============================================================
+🚀 STEP 4: Uploading Image & Generating Metadata...
+============================================================
+🔗 Image URI: ipfs://QmePj7Ntrbg7bgTePXpCncDyWNJXfRgZhBK4J1jjp3XKDv
+🔗 Metadata URI: ipfs://QmXtnwb52bncJyFg5vPgrQap7psxoo8K6LPHvqvkCXBja3
+
+============================================================
+🔗 STEP 5: Deploying ERC-20 Token & Minting NFT...
+============================================================
+🚀 Deploying Agentic-1890299939223470499 (AGENTIC0499) with supply 1000000 on base-sepolia...
+✅ Token deployed at: Deployed ERC20 token contract Agentic-1890299939223470499 (AGENTIC0499) with total supply of 1000000 tokens at address 0x8899367e2E38E88D2753Ea72AC03d245060990A8. Transaction link: https://sepolia.basescan.org/tx/0xbfb8e4b08569e05791800fd49f577dfe2b5d45c6ba9cc02244690129a40194c2
+🚀 Minting NFT AgenticNFT-1890299939223470499 (AGNTC0499) with metadata at ipfs://QmXtnwb52bncJyFg5vPgrQap7psxoo8K6LPHvqvkCXBja3 on base-sepolia...
+✅ NFT deployed at: Deployed NFT Collection AgenticNFT-1890299939223470499 to address 0x6Ffc9330dC1DCeA4d72Fb5E90B69798c48051246 on network base-sepolia.
+Transaction hash for the deployment: 0x57014058dac6da7934ae546b1d146a46c89d7721b7c9d4134e129fb8aeaacfdc
+Transaction link for the deployment: https://sepolia.basescan.org/tx/0x57014058dac6da7934ae546b1d146a46c89d7721b7c9d4134e129fb8aeaacfdc
+
+============================================================
+✅ Tweet 1890299939223470499 processed! Waiting 200 seconds before reward distribution...
+============================================================
+⏳ Waiting 1 seconds before reward distribution.....
+✅ Time is up! Distributing rewards...
+
+
+============================================================
+📊 STEP 6: Checking Tweet Engagement & Distributing Rewards...
+============================================================
+🔄 Token still valid, skipping refresh.
+🔍 Auth check: 200 {"data":{"id":"1888039454746824704","name":"Obfuscated Cat Agent","username":"ObfuscatedCat"}}
+
+📊 Engagement Summary:
+--------------------------------------------------
+👍 Liked by: ['ObfuscatedCat', 'ic_rampXYZ']
+💬 Comments with wallet addresses: {'ObfuscatedCat': '0xd9A870f56Aa563A9671028518b1222d8B4Ce02e0', 'ic_rampXYZ': '0x60e40ecf531F13bAa71Ff23aCff347BF47fa3274'}
+--------------------------------------------------
+💰 Sending 100 tokens to 0xd9A870f56Aa563A9671028518b1222d8B4Ce02e0 from Deployed ERC20 token contract Agentic-1890299939223470499 (AGENTIC0499) with total supply of 1000000 tokens at address 0x8899367e2E38E88D2753Ea72AC03d245060990A8. Transaction link: https://sepolia.basescan.org/tx/0xbfb8e4b08569e05791800fd49f577dfe2b5d45c6ba9cc02244690129a40194c2...
+💰 Sending 100 tokens to 0x60e40ecf531F13bAa71Ff23aCff347BF47fa3274 from Deployed ERC20 token contract Agentic-1890299939223470499 (AGENTIC0499) with total supply of 1000000 tokens at address 0x8899367e2E38E88D2753Ea72AC03d245060990A8. Transaction link: https://sepolia.basescan.org/tx/0xbfb8e4b08569e05791800fd49f577dfe2b5d45c6ba9cc02244690129a40194c2...
+🎨 Sending NFT Deployed NFT Collection AgenticNFT-1890299939223470499 to address 0x6Ffc9330dC1DCeA4d72Fb5E90B69798c48051246 on network base-sepolia.
+Transaction hash for the deployment: 0x57014058dac6da7934ae546b1d146a46c89d7721b7c9d4134e129fb8aeaacfdc
+Transaction link for the deployment: https://sepolia.basescan.org/tx/0x57014058dac6da7934ae546b1d146a46c89d7721b7c9d4134e129fb8aeaacfdc to ObfuscatedCat (0xd9A870f56Aa563A9671028518b1222d8B4Ce02e0)...
+✅ Rewards distributed successfully.
+✅ Pipeline execution complete.
+
+🎉 Test pipeline executed successfully!
 ```
